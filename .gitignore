@@ -1,0 +1,7 @@
+/build/
+/output/
+/tmp/
+mx.scratch
+
+__pycache__/
+*.py[cod]
