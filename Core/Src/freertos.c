@@ -121,7 +121,10 @@ void MX_FREERTOS_Init(void) {
   xTaskCreate(Uart_Task, "UART", 256, NULL, osPriorityNormal,&Uart_TaskHandle);
   xTaskCreate(SD_Task, "SD", 256, NULL, osPriorityNormal,NULL);
   xTaskCreate(W25Q64_Task, "W25Q64", 256, NULL, osPriorityNormal,&W25Q64_TaskHandle);
-  xTaskCreate(RS485_Task, "RS485", 256, NULL, osPriorityNormal,&RS485_TaskHandle);
+  if(xTaskCreate(RS485_Task, "RS485", 256, NULL, osPriorityNormal,&RS485_TaskHandle) != pdPASS){
+    vTaskDelete(LED_Handle);
+  }
+  
   
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */

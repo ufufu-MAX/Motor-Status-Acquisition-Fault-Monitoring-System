@@ -75,6 +75,79 @@ static uint32_t SD_ReadLastSequence(FIL *File, FSIZE_t *Valid_End)
 }
 
 
+static FRESULT SD_TryRemount(void)
+{
+    FRESULT result;
+    UINT written;
+    uint32_t last_sequence;
+    FSIZE_t valid_end;
+    const char header[] =
+        "sequence,time,rpm,current,temp,voltage,fault\r\n";
+
+    /* 解除旧卷注册，避免继续使用拔卡前的文件对象 */
+    result = f_mount(NULL, (TCHAR *)SDPath, 0);
+    if (result != FR_OK) {
+        return result;
+    }
+
+    /* 重新检测并挂载当前 SD 卡 */
+    result = f_mount(&SDFatFS, (TCHAR *)SDPath, 1);
+    if (result != FR_OK) {
+        goto failed;
+    }
+
+    result = f_open(&SDFile,
+                    "0:/MOTOR.CSV",
+                    FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+    if (result != FR_OK) {
+        goto failed;
+    }
+
+    /* 找到最后一条以换行符结束的记录，并清除不完整尾行 */
+    last_sequence = SD_ReadLastSequence(&SDFile, &valid_end);
+    (void)last_sequence; /* 运行中不回退 ADC 序号，避免序号重复 */
+
+    result = f_lseek(&SDFile, valid_end);
+    if (result != FR_OK) {
+        goto failed;
+    }
+
+    result = f_truncate(&SDFile);
+    if (result != FR_OK) {
+        goto failed;
+    }
+
+    /* 新卡或空文件需要补写表头 */
+    if (f_size(&SDFile) == 0) {
+        result = f_write(&SDFile, header, sizeof(header) - 1, &written);
+        if ((result != FR_OK) || (written != sizeof(header) - 1)) {
+            if (result == FR_OK) {
+                result = FR_DISK_ERR;
+            }
+            goto failed;
+        }
+
+        result = f_sync(&SDFile);
+        if (result != FR_OK) {
+            goto failed;
+        }
+    }
+
+    /* 恢复到文件末尾，后续记录从这里追加 */
+    result = f_lseek(&SDFile, f_size(&SDFile));
+    if (result != FR_OK) {
+        goto failed;
+    }
+
+    return FR_OK;
+
+failed:
+    /* 让下次重试从重新挂载开始，不继续使用可能失效的 FIL */
+    (void)f_mount(NULL, (TCHAR *)SDPath, 0);
+    return result;
+}
+
+
 void SD_Task(void *arg)
 {
     FRESULT Result;
@@ -82,6 +155,7 @@ void SD_Task(void *arg)
     Motor_Data_t Write_Data;
     char line[128];
     uint8_t Flush_CacheCount = 0;
+    uint8_t SD_Online = 1;
     uint32_t last_sequence;
     FSIZE_t valid_end;
     const char Header[] =  "sequence,time,rpm,current,temp,voltage,fault\r\n";
@@ -142,6 +216,14 @@ void SD_Task(void *arg)
 
     while (1) 
     {
+        if (!SD_Online) {
+            osDelay(pdMS_TO_TICKS(1000));
+            if (SD_TryRemount() == FR_OK) {
+                SD_Online = 1;
+            }
+            continue;
+        }
+
         osDelay(pdMS_TO_TICKS(10));
 
         xQueueReceive(SD_Handle, &Write_Data, portMAX_DELAY);
@@ -165,7 +247,8 @@ void SD_Task(void *arg)
         }       
         Result = f_write(&SDFile, line, (UINT)len, &Written);
         if ((Result != FR_OK) || (Written != (UINT)len)) {
-            osDelay(portMAX_DELAY);
+            SD_Online = 0;
+            continue;
         }
         Flush_CacheCount++;
         if (Flush_CacheCount >= 10) {
@@ -173,7 +256,8 @@ void SD_Task(void *arg)
             if (Result == FR_OK) {
                 Result = f_sync(&SDFile);
                 if (Result != FR_OK) {
-                    osDelay(portMAX_DELAY);
+                    SD_Online = 0;
+                    continue;
                 }
             }
         }

@@ -13,9 +13,12 @@
 #include "stm32f4xx_ll_sdmmc.h"
 #include "usart.h"
 #include <stdint.h>
+#include <string.h>
 #include "ADC_DATA.h"
+#include "semphr.h"
 
 extern volatile Motor_Data_t ADC_Val;
+xSemaphoreHandle Motor_Mutex = NULL;
 
 #define REG_SEQUENCE_HIGH   0x0000U
 #define REG_SEQUENCE_LOW    0x0001U
@@ -24,6 +27,21 @@ extern volatile Motor_Data_t ADC_Val;
 #define REG_VOLTAGE         0x0004U
 #define REG_CURRENT         0x0005U
 #define REG_FAULT_CODE      0x0006U
+
+#define REG_CURRENT_TRIP              0x0100U
+#define REG_CURRENT_RELEASE           0x0101U
+#define REG_TEMP_MAX_TRIP             0x0102U
+#define REG_TEMP_MAX_RELEASE          0x0103U
+#define REG_MOTOR_SPEED_STALL_TRIP     0x0104U
+#define REG_MOTOR_SPEED_STALL_RELEASE  0x0105U
+#define REG_TEMP_MIN_TRIP             0x0106U
+#define REG_TEMP_MIN_RELEASE          0x0107U
+#define REG_VOLT_TRIP                 0x0108U
+#define REG_VOLT_RELEASE              0x0109U
+#define REG_MOTOR_SPEED_MIN_TRIP       0x010AU
+#define REG_MOTOR_SPEED_MIN_RELEASE    0x010BU
+#define REG_MOTOR_SPEED_MAX_TRIP       0x010CU
+#define REG_MOTOR_SPEED_MAX_RELEASE    0x010DU
 
 RS485_REC_t RS485_Receive;
 volatile uint16_t len = 0;
@@ -66,12 +84,12 @@ void RS485_Init()
         vTaskDelete(NULL);
         return;
     }
-    HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);
+    RS485_SetReceive();
     if (HAL_UARTEx_ReceiveToIdle_IT(&huart1, RS485_Receive.Data, sizeof(RS485_Receive.Data)) != HAL_OK) {
         vTaskDelete(NULL);
         return;
     }
-    
+    (void)HAL_UARTEx_ReceiveToIdle_IT(&huart1, RS485_Receive.Data, sizeof(RS485_Receive.Data));
 }
 
 
@@ -183,6 +201,217 @@ uint16_t Modbus_ReadInput(const RS485_REC_t Receive_Data,const uint16_t Reg_Addr
     return 1U;
 }
 
+static uint8_t RS485_ReadThreshold(uint16_t Address,uint16_t *Value)
+{
+    switch (Address) {
+    case REG_CURRENT_TRIP:
+        *Value = (uint16_t)Current_Trip * 100U;
+        break;
+    case REG_CURRENT_RELEASE:
+        *Value = (uint16_t)Current_Relsase * 100U;
+        break;
+    case REG_TEMP_MAX_TRIP:
+        *Value = (uint16_t)Temp_Max_Trip * 100U;
+        break;
+    case REG_TEMP_MAX_RELEASE:
+        *Value = (uint16_t)Temp_Max_Release * 100U;
+        break;
+    case REG_MOTOR_SPEED_STALL_TRIP:
+        *Value = Motor_Speed_Stall_Trip;
+        break;
+    case REG_MOTOR_SPEED_STALL_RELEASE:
+        *Value = Motor_Speed_Stall_Release;
+        break;
+    case REG_TEMP_MIN_TRIP:
+        *Value = (uint16_t)Temp_Min_Trip * 100U;
+        break;
+    case REG_TEMP_MIN_RELEASE:
+        *Value = (uint16_t)Temp_Min_Release * 100U;
+        break;
+    case REG_VOLT_TRIP:
+        *Value = (uint16_t)(Volt_Trip * 100.0f + 0.5f);
+        break;
+    case REG_VOLT_RELEASE:
+        *Value = (uint16_t)Volt_Relsase * 100U;
+        break;
+    case REG_MOTOR_SPEED_MIN_TRIP:
+        *Value = Motor_Speed_Min_Trip;
+        break;
+    case REG_MOTOR_SPEED_MIN_RELEASE:
+        *Value = Motor_Speed_Min_Release;
+        break;
+    case REG_MOTOR_SPEED_MAX_TRIP:
+        *Value = Motor_Speed_Max_Trip;
+        break;
+    case REG_MOTOR_SPEED_MAX_RELEASE:
+        *Value = Motor_Speed_Max_Release;
+        break;
+    default:
+        return 0U;
+    }
+    return 1U;
+}
+
+/* Return 0 on success, otherwise a Modbus exception code. */
+static uint8_t RS485_WriteThreshold(uint16_t Address,uint16_t Value)
+{
+    
+    switch (Address) {
+    case REG_CURRENT_TRIP:
+        if ((Value > 1000U) || (Value % 100U != 0U) ||
+            (Value <= (uint16_t)Current_Relsase * 100U)) {
+            xSemaphoreGive(Motor_Mutex);
+            return 0x03U;
+        }
+        xSemaphoreGive(Motor_Mutex);
+        Current_Trip = (uint8_t)(Value / 100U);
+        break;
+    case REG_CURRENT_RELEASE:
+        if ((Value % 100U != 0U) ||
+            (Value >= (uint16_t)Current_Trip * 100U)) {
+            xSemaphoreGive(Motor_Mutex);
+            return 0x03U;
+        }
+        Current_Relsase = (uint8_t)(Value / 100U);
+        break;
+    case REG_TEMP_MAX_TRIP:
+        if ((Value > 10000U) || (Value % 100U != 0U) ||
+            (Value <= (uint16_t)Temp_Max_Release * 100U)) {
+            return 0x03U;
+        }
+        Temp_Max_Trip = (uint8_t)(Value / 100U);
+        break;
+    case REG_TEMP_MAX_RELEASE:
+        if ((Value % 100U != 0U) ||
+            (Value >= (uint16_t)Temp_Max_Trip * 100U) ||
+            (Value <= (uint16_t)Temp_Min_Release * 100U)) {
+            return 0x03U;
+        }
+        Temp_Max_Release = (uint8_t)(Value / 100U);
+        break;
+    case REG_MOTOR_SPEED_STALL_TRIP:
+        if ((Value > UINT8_MAX) || (Value >= Motor_Speed_Stall_Release)) {
+            return 0x03U;
+        }
+        Motor_Speed_Stall_Trip = (uint8_t)Value;
+        break;
+    case REG_MOTOR_SPEED_STALL_RELEASE:
+        if ((Value > UINT8_MAX) || (Value <= Motor_Speed_Stall_Trip) ||
+            (Value >= Motor_Speed_Min_Trip)) {
+            return 0x03U;
+        }
+        Motor_Speed_Stall_Release = (uint8_t)Value;
+        break;
+    case REG_TEMP_MIN_TRIP:
+        if ((Value % 100U != 0U) ||
+            (Value >= (uint16_t)Temp_Min_Release * 100U)) {
+            return 0x03U;
+        }
+        Temp_Min_Trip = (uint8_t)(Value / 100U);
+        break;
+    case REG_TEMP_MIN_RELEASE:
+        if ((Value % 100U != 0U) ||
+            (Value <= (uint16_t)Temp_Min_Trip * 100U) ||
+            (Value >= (uint16_t)Temp_Max_Release * 100U)) {
+            return 0x03U;
+        }
+        Temp_Min_Release = (uint8_t)(Value / 100U);
+        break;
+    case REG_VOLT_TRIP:
+        if ((Value == 0U) || (Value > 330U) ||
+            (Value >= (uint16_t)Volt_Relsase * 100U)) {
+            return 0x03U;
+        }
+        Volt_Trip = (float)Value / 100.0f;
+        break;
+    case REG_VOLT_RELEASE:
+        if ((Value > 330U) || (Value % 100U != 0U) ||
+            (Value <= (uint16_t)(Volt_Trip * 100.0f + 0.5f))) {
+            return 0x03U;
+        }
+        Volt_Relsase = (uint8_t)(Value / 100U);
+        break;
+    case REG_MOTOR_SPEED_MIN_TRIP:
+        if ((Value <= Motor_Speed_Stall_Release) ||
+            (Value >= Motor_Speed_Min_Release)) {
+            return 0x03U;
+        }
+        Motor_Speed_Min_Trip = Value;
+        break;
+    case REG_MOTOR_SPEED_MIN_RELEASE:
+        if ((Value <= Motor_Speed_Min_Trip) ||
+            (Value >= Motor_Speed_Max_Release)) {
+            return 0x03U;
+        }
+        Motor_Speed_Min_Release = Value;
+        break;
+    case REG_MOTOR_SPEED_MAX_TRIP:
+        if (Value <= Motor_Speed_Max_Release) {
+            return 0x03U;
+        }
+        Motor_Speed_Max_Trip = Value;
+        break;
+    case REG_MOTOR_SPEED_MAX_RELEASE:
+        if ((Value >= Motor_Speed_Max_Trip) ||
+            (Value <= Motor_Speed_Min_Release)) {
+            return 0x03U;
+        }
+        Motor_Speed_Max_Release = Value;
+        break;
+    default:
+        return 0x02U;
+    }
+    return 0U;
+}
+
+static uint8_t Modbus_ReadHolding(uint16_t Reg_AddressStart,uint16_t Read_RegCount,uint8_t *Tx_Data,uint8_t *len)
+{
+    uint16_t Data_Length;
+    uint16_t CRC_Value;
+
+    if ((Read_RegCount == 0U) || (Read_RegCount > 14U)) {
+        return 0x03U;
+    }
+    if ((Reg_AddressStart < REG_CURRENT_TRIP) ||
+        ((uint32_t)Reg_AddressStart + Read_RegCount - 1U > REG_MOTOR_SPEED_MAX_RELEASE)) {
+        return 0x02U;
+    }
+
+    Tx_Data[0] = RS485_SLAVE_ADDRESS;
+    Tx_Data[1] = 0x03U;
+    Tx_Data[2] = (uint8_t)(Read_RegCount * 2U);
+
+    taskENTER_CRITICAL();
+    for (uint16_t i = 0U; i < Read_RegCount; i++) {
+        uint16_t Value;
+        if (RS485_ReadThreshold(Reg_AddressStart + i, &Value) == 0U) {
+            taskEXIT_CRITICAL();
+            return 0x02U;
+        }
+        Writeuint16_To_uint8(&Tx_Data[3U + i * 2U], Value);
+    }
+    taskEXIT_CRITICAL();
+
+    Data_Length = (uint16_t)(3U + Read_RegCount * 2U);
+    CRC_Value = Modbus_CRC16(Tx_Data, Data_Length);
+    Tx_Data[Data_Length] = (uint8_t)(CRC_Value & 0xFFU);
+    Tx_Data[Data_Length + 1U] = (uint8_t)(CRC_Value >> 8);
+    *len = (uint8_t)(Data_Length + 2U);
+    return 0U;
+}
+
+static void Modbus_Exception(uint8_t CMD,uint8_t Exception,uint8_t *Tx_Data,uint8_t *len)
+{
+    uint16_t CRC_Value;
+    Tx_Data[0] = RS485_SLAVE_ADDRESS;
+    Tx_Data[1] = CMD | 0x80U;
+    Tx_Data[2] = Exception;
+    CRC_Value = Modbus_CRC16(Tx_Data, 3U);
+    Tx_Data[3] = (uint8_t)(CRC_Value & 0xFFU);
+    Tx_Data[4] = (uint8_t)(CRC_Value >> 8);
+    *len = 5U;
+}
+
 void RS485_Task(void *arg)
 {
     uint16_t Receive_CRC = 0;
@@ -192,13 +421,18 @@ void RS485_Task(void *arg)
     uint16_t Reg_AddressStart;
     uint16_t Read_RegCount;
     uint8_t Tx_len;
+    uint8_t Exception;
+    uint32_t Tx_Start;
+    Motor_Mutex = xSemaphoreCreateMutex();
     (void)arg;
     RS485_Init();
     while (1) {
        
-        xQueueReceive(RS485_QueueHandle, &Receive_QueueValue, portMAX_DELAY);
+        if (xQueueReceive(RS485_QueueHandle, &Receive_QueueValue, portMAX_DELAY) != pdPASS) {
+            continue;
+        }
 
-        if ((Receive_QueueValue.len < 8U) ||
+        if ((Receive_QueueValue.len < 4U) ||
             (Receive_QueueValue.len > sizeof(Receive_QueueValue.Data))) {
             continue;
         }
@@ -212,21 +446,67 @@ void RS485_Task(void *arg)
         }
 
         RS485_CMD = Receive_QueueValue.Data[1];
-        Reg_AddressStart = Readuint8_To_uint16(&Receive_QueueValue.Data[2]);     
-        Read_RegCount = Readuint8_To_uint16(&Receive_QueueValue.Data[4]); 
-        
-        switch (RS485_CMD) {
-        
-            case 0x0004:   
+        Tx_len = 0U;
+        Exception = 0U;
+        Reg_AddressStart = 0U;
+        Read_RegCount = 0U;
+        if (((RS485_CMD == 0x03U) || (RS485_CMD == 0x04U) || (RS485_CMD == 0x06U)) &&
+            (Receive_QueueValue.len != 8U)) {
+            Exception = 0x03U;
+        }else {
+            if (Receive_QueueValue.len == 8U) {
+                Reg_AddressStart = Readuint8_To_uint16(&Receive_QueueValue.Data[2]);
+                Read_RegCount = Readuint8_To_uint16(&Receive_QueueValue.Data[4]);
+            }
+
+            switch (RS485_CMD) {
+
+            case 0x0003:
+                Exception = Modbus_ReadHolding(Reg_AddressStart,Read_RegCount,RS485Tx_Data,&Tx_len);
+                break;
+
+            case 0x0004:
                 if (Modbus_ReadInput(Receive_QueueValue,Reg_AddressStart,Read_RegCount,RS485Tx_Data,&Tx_len) != 1U) {
-                    break;
+                    Exception = (Read_RegCount == 0U || Read_RegCount > 7U) ? 0x03U : 0x02U;
                 }
-                RS485_SetTx();
-                if (HAL_UART_Transmit_IT(&huart1, RS485Tx_Data, Tx_len) != HAL_OK) {
-                    RS485_SetReceive();
+                break;
+
+            case 0x0006:
+                taskENTER_CRITICAL();
+                Exception = RS485_WriteThreshold(Reg_AddressStart,Read_RegCount);
+                taskEXIT_CRITICAL();
+                if (Exception == 0U) {
+                    for (uint8_t i = 0U; i < 8U; i++) {
+                        RS485Tx_Data[i] = Receive_QueueValue.Data[i];
+                    }
+                    Tx_len = 8U;
                 }
-               
-            default:break;
+                break;
+
+            default:
+                Exception = 0x01U;
+                break;
+            }
+        }
+        if (Exception != 0U) {
+            Modbus_Exception(RS485_CMD, Exception, RS485Tx_Data, &Tx_len);
+        }
+
+        RS485_SetTx();
+        if (HAL_UART_Transmit_IT(&huart1, RS485Tx_Data, Tx_len) != HAL_OK) {
+            RS485_SetReceive();
+            continue;
+        }
+
+        /* Keep the response buffer unchanged until transmission completes. */
+        Tx_Start = HAL_GetTick();
+        while (huart1.gState != HAL_UART_STATE_READY) {
+            if ((uint32_t)(HAL_GetTick() - Tx_Start) >= 1000U) {
+                (void)HAL_UART_AbortTransmit(&huart1);
+                RS485_SetReceive();
+                break;
+            }
+            osDelay(1);
         }
     }
 }

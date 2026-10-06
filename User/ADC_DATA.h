@@ -13,26 +13,43 @@
 #define ADC_FAULT_MOTOR_ABNORMAL    (1U << 3)
 #define ADC_FAULT_MOTOR_SPEED_STALL (1U << 4)
 
-#define TEMP_MIN_TPIP               10U
-#define TEMP_MIN_RELEASE            12U
+typedef struct
+{
+   
+uint8_t Temp_Min_Trip;
+uint8_t Temp_Min_Release;
+uint8_t Temp_Max_Trip;
+uint8_t Temp_Max_Release;
 
-#define TEMP_MAX_TPIP               60U
-#define TEMP_MAX_RELEASE            55U
+uint8_t Current_Trip;
+uint8_t Current_Relsase;
 
-#define CURRENT_TRIP                8U
-#define CURRENT_RELEASE             7U
+float Volt_Trip;
+uint8_t Volt_Relsase;
 
-#define VOLT_TRIP                   2.8f
-#define VOLT_RELEASE                3U
+uint16_t Motor_Speed_Min_Trip;
+uint16_t Motor_Speed_Min_Release;
+uint16_t Motor_Speed_Max_Trip;
+uint16_t Motor_Speed_Max_Release;
+uint8_t Motor_Speed_Stall_Trip;
+uint8_t Motor_Speed_Stall_Release;
 
-#define MOTOR_SPEED_MIN_TRIP        2000U
-#define MOTOR_SPEED_MIN_RELSASE     2200U
+}ADC_Thresholds_t;
 
-#define MOTOR_SPEED_MAX_TRIP        4500U
-#define MOTOR_SPEED_MAX_RELEASE     4300U
-
-#define MOTOR_SPEED_STALL_TRIP      100U
-#define MOTOR_SPEED_STALL_RELEASE   200U
+extern volatile uint8_t Temp_Min_Trip;
+extern volatile uint8_t Temp_Min_Release;
+extern volatile uint8_t Temp_Max_Trip;
+extern volatile uint8_t Temp_Max_Release;
+extern volatile uint8_t Current_Trip;
+extern volatile uint8_t Current_Relsase;
+extern volatile float Volt_Trip;
+extern volatile uint8_t Volt_Relsase;
+extern volatile uint16_t Motor_Speed_Min_Trip;
+extern volatile uint16_t Motor_Speed_Min_Release;
+extern volatile uint16_t Motor_Speed_Max_Trip;
+extern volatile uint16_t Motor_Speed_Max_Release;
+extern volatile uint8_t Motor_Speed_Stall_Trip;
+extern volatile uint8_t Motor_Speed_Stall_Release;
 
 
 typedef struct {

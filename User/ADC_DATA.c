@@ -57,23 +57,23 @@ static uint8_t FaultGoodCount[FAULT_COUNT] = {0};
 #define MOTOR_SPEED_STALL_RELEASE   200U
 */
 
-uint8_t Temp_Min_Trip = 10;
-uint8_t Temp_Min_Release = 12;
-uint8_t Temp_Max_Trip = 60;
-uint8_t Temp_Max_Release = 55;
+volatile uint8_t Temp_Min_Trip = 10;
+volatile uint8_t Temp_Min_Release = 12;
+volatile uint8_t Temp_Max_Trip = 60;
+volatile uint8_t Temp_Max_Release = 55;
 
-uint8_t Current_Trip = 8;
-uint8_t Current_Relsase = 7;
+volatile uint8_t Current_Trip = 8;
+volatile uint8_t Current_Relsase = 7;
 
-float Volt_Trip = 2.8;
-uint8_t Volt_Relsase = 3;
+volatile float Volt_Trip = 2.8;
+volatile uint8_t Volt_Relsase = 3;
 
-uint16_t Motor_Speed_Min_Trip = 2000;
-uint16_t Motor_Speed_Min_Release = 2200;
-uint16_t Motor_Speed_Max_Trip = 4500;
-uint16_t Motor_Speed_Max_Release = 4300;
-uint8_t Motor_Speed_Stall_Trip = 100;
-uint8_t Motor_Speed_Stall_Release = 200;
+volatile uint16_t Motor_Speed_Min_Trip = 2000;
+volatile uint16_t Motor_Speed_Min_Release = 2200;
+volatile uint16_t Motor_Speed_Max_Trip = 4500;
+volatile uint16_t Motor_Speed_Max_Release = 4300;
+volatile uint8_t Motor_Speed_Stall_Trip = 100;
+volatile uint8_t Motor_Speed_Stall_Release = 200;
 
 
 
@@ -239,7 +239,9 @@ void ADC_ProcessingTask(void *arg)
                 memset(Adc_Sum, 0, sizeof(Adc_Sum));
                 Sample_count = 0;
                 Motor_ConverAll(Adc_average);
+                taskENTER_CRITICAL();
                 ADC_Val.fault_code = ADC_UpdateFault(&ADC_Val);
+                taskEXIT_CRITICAL();
                 break;
             }           
         }
