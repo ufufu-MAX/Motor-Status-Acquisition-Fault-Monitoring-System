@@ -22,10 +22,10 @@
 #include "adc.h"
 #include "crc.h"
 #include "dma.h"
+#include "fatfs.h"
 #include "rtc.h"
+#include "sdio.h"
 #include "spi.h"
-#include "stm32f4xx.h"
-#include "stm32f4xx_hal_def.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -35,6 +35,10 @@
 #include "LED.h"
 #include "ADC_DATA.h"
 #include "RTC_Time.h"
+#include "CLI.h"
+#include "Uart_Tx.h"
+#include "W25Q64.h"
+#include "RS485.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,7 +68,7 @@ extern volatile uint8_t ADC_FLAG;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void System_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -86,7 +90,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
- HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -108,7 +112,11 @@ int main(void)
   MX_TIM4_Init();
   MX_RTC_Init();
   MX_USART2_UART_Init();
+  MX_SDIO_SD_Init();
+  MX_FATFS_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  System_Init();
   if (RTC_TimeInit() != HAL_OK) {
     Error_Handler();
   }
@@ -160,7 +168,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -179,22 +187,25 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
+  /** Enables the Clock Security System
+  */
+  HAL_RCC_EnableCSS();
 }
 
 /* USER CODE BEGIN 4 */
 
-void HAL_TIM_PeriodElapsedHalfCpltCallback(TIM_HandleTypeDef *htim)
-{
-    if(htim->Instance == TIM4){
-      
-    }
-}
 
-void system_Init(void)
+static void System_Init(void)
 {
-    HAL_TIM_Base_Init(&htim4);
-    HAL_TIM_Base_Start_IT(&htim4);    
-    HAL_ADC_Init(&hadc1);
+    //HAL_TIM_Base_Init(&htim4);
+    //HAL_TIM_Base_Start_IT(&htim4);  
+    UartTx_Init();  
+    W25Q64_Init();
+    if(CLI_Init() != HAL_OK){
+      Error_Handler();
+
+    }
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)

@@ -29,6 +29,11 @@
 #include "LED.h"
 #include "ADC_DATA.h"
 #include "RTC_Time.h"
+#include "CLI.h"
+#include "Uart_Tx.h"
+#include "SD.h"
+#include "W25Q64.h"
+#include "RS485.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,6 +47,9 @@ extern TaskHandle_t LED_Handle;
 extern TaskHandle_t ADC_ProcessingHandle;
 extern TaskHandle_t ADC_AcquisitionHandle;
 extern QueueHandle_t ADC_QueueHandle;
+extern TaskHandle_t Uart_TaskHandle;
+extern TaskHandle_t W25Q64_TaskHandle;
+extern TaskHandle_t RS485_TaskHandle;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -109,6 +117,12 @@ void MX_FREERTOS_Init(void) {
   xTaskCreate(LED, "LED_Test", 128, NULL, osPriorityLow7, &LED_Handle);
   xTaskCreate(ADC_ProcessingTask, "ADC_ProcessingTask", 512, NULL, osPriorityNormal, &ADC_ProcessingHandle);
   xTaskCreate(ADC_AcquisitionTask, "ADC_AcquisitionTask", 256,NULL, osPriorityNormal, &ADC_AcquisitionHandle);
+  xTaskCreate(CLI_Task, "CLI", 256, NULL, osPriorityNormal, NULL);
+  xTaskCreate(Uart_Task, "UART", 256, NULL, osPriorityNormal,&Uart_TaskHandle);
+  xTaskCreate(SD_Task, "SD", 256, NULL, osPriorityNormal,NULL);
+  xTaskCreate(W25Q64_Task, "W25Q64", 256, NULL, osPriorityNormal,&W25Q64_TaskHandle);
+  xTaskCreate(RS485_Task, "RS485", 256, NULL, osPriorityNormal,&RS485_TaskHandle);
+  
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 

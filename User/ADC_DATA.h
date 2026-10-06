@@ -26,7 +26,7 @@
 #define VOLT_RELEASE                3U
 
 #define MOTOR_SPEED_MIN_TRIP        2000U
-#define MOTOR_SPEED_MIN_RELSASE    2200U
+#define MOTOR_SPEED_MIN_RELSASE     2200U
 
 #define MOTOR_SPEED_MAX_TRIP        4500U
 #define MOTOR_SPEED_MAX_RELEASE     4300U
@@ -44,6 +44,8 @@ typedef struct {
     float Temp_val;
     float Volt_val;
     float Curr_val;
+
+    uint8_t fault_code;
 }Motor_Data_t;
 
 typedef struct {

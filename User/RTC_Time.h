@@ -2,6 +2,7 @@
 #define  __RTC_Time_H_
 
 #include <stdint.h>
+#include "stm32f4xx_hal.h"
 
 #define RTC_INIT_MAGIC    0xA5A55A5AU
 
