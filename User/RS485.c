@@ -16,6 +16,7 @@
 #include <string.h>
 #include "ADC_DATA.h"
 #include "semphr.h"
+#include "W25Q64.h"
 
 extern volatile Motor_Data_t ADC_Val;
 xSemaphoreHandle Motor_Mutex = NULL;
@@ -255,112 +256,144 @@ static uint8_t RS485_ReadThreshold(uint16_t Address,uint16_t *Value)
 /* Return 0 on success, otherwise a Modbus exception code. */
 static uint8_t RS485_WriteThreshold(uint16_t Address,uint16_t Value)
 {
-    
+    ADC_Thresholds_t threshold;
+
+    memset(&threshold, 0, sizeof(threshold));
+    threshold.Temp_Min_Trip = Temp_Min_Trip;
+    threshold.Temp_Min_Release = Temp_Min_Release;
+    threshold.Temp_Max_Trip = Temp_Max_Trip;
+    threshold.Temp_Max_Release = Temp_Max_Release;
+    threshold.Current_Trip = Current_Trip;
+    threshold.Current_Relsase = Current_Relsase;
+    threshold.Volt_Trip = Volt_Trip;
+    threshold.Volt_Relsase = Volt_Relsase;
+    threshold.Motor_Speed_Min_Trip = Motor_Speed_Min_Trip;
+    threshold.Motor_Speed_Min_Release = Motor_Speed_Min_Release;
+    threshold.Motor_Speed_Max_Trip = Motor_Speed_Max_Trip;
+    threshold.Motor_Speed_Max_Release = Motor_Speed_Max_Release;
+    threshold.Motor_Speed_Stall_Trip = Motor_Speed_Stall_Trip;
+    threshold.Motor_Speed_Stall_Release = Motor_Speed_Stall_Release;
+
     switch (Address) {
     case REG_CURRENT_TRIP:
         if ((Value > 1000U) || (Value % 100U != 0U) ||
-            (Value <= (uint16_t)Current_Relsase * 100U)) {
-            xSemaphoreGive(Motor_Mutex);
+            (Value <= (uint16_t)threshold.Current_Relsase * 100U)) {
             return 0x03U;
         }
-        xSemaphoreGive(Motor_Mutex);
-        Current_Trip = (uint8_t)(Value / 100U);
+        threshold.Current_Trip = (uint8_t)(Value / 100U);
         break;
     case REG_CURRENT_RELEASE:
         if ((Value % 100U != 0U) ||
-            (Value >= (uint16_t)Current_Trip * 100U)) {
-            xSemaphoreGive(Motor_Mutex);
+            (Value >= (uint16_t)threshold.Current_Trip * 100U)) {
             return 0x03U;
         }
-        Current_Relsase = (uint8_t)(Value / 100U);
+        threshold.Current_Relsase = (uint8_t)(Value / 100U);
         break;
     case REG_TEMP_MAX_TRIP:
         if ((Value > 10000U) || (Value % 100U != 0U) ||
-            (Value <= (uint16_t)Temp_Max_Release * 100U)) {
+            (Value <= (uint16_t)threshold.Temp_Max_Release * 100U)) {
             return 0x03U;
         }
-        Temp_Max_Trip = (uint8_t)(Value / 100U);
+        threshold.Temp_Max_Trip = (uint8_t)(Value / 100U);
         break;
     case REG_TEMP_MAX_RELEASE:
         if ((Value % 100U != 0U) ||
-            (Value >= (uint16_t)Temp_Max_Trip * 100U) ||
-            (Value <= (uint16_t)Temp_Min_Release * 100U)) {
+            (Value >= (uint16_t)threshold.Temp_Max_Trip * 100U) ||
+            (Value <= (uint16_t)threshold.Temp_Min_Release * 100U)) {
             return 0x03U;
         }
-        Temp_Max_Release = (uint8_t)(Value / 100U);
+        threshold.Temp_Max_Release = (uint8_t)(Value / 100U);
         break;
     case REG_MOTOR_SPEED_STALL_TRIP:
-        if ((Value > UINT8_MAX) || (Value >= Motor_Speed_Stall_Release)) {
+        if ((Value > UINT8_MAX) || (Value >= threshold.Motor_Speed_Stall_Release)) {
             return 0x03U;
         }
-        Motor_Speed_Stall_Trip = (uint8_t)Value;
+        threshold.Motor_Speed_Stall_Trip = (uint8_t)Value;
         break;
     case REG_MOTOR_SPEED_STALL_RELEASE:
-        if ((Value > UINT8_MAX) || (Value <= Motor_Speed_Stall_Trip) ||
-            (Value >= Motor_Speed_Min_Trip)) {
+        if ((Value > UINT8_MAX) || (Value <= threshold.Motor_Speed_Stall_Trip) ||
+            (Value >= threshold.Motor_Speed_Min_Trip)) {
             return 0x03U;
         }
-        Motor_Speed_Stall_Release = (uint8_t)Value;
+        threshold.Motor_Speed_Stall_Release = (uint8_t)Value;
         break;
     case REG_TEMP_MIN_TRIP:
         if ((Value % 100U != 0U) ||
-            (Value >= (uint16_t)Temp_Min_Release * 100U)) {
+            (Value >= (uint16_t)threshold.Temp_Min_Release * 100U)) {
             return 0x03U;
         }
-        Temp_Min_Trip = (uint8_t)(Value / 100U);
+        threshold.Temp_Min_Trip = (uint8_t)(Value / 100U);
         break;
     case REG_TEMP_MIN_RELEASE:
         if ((Value % 100U != 0U) ||
-            (Value <= (uint16_t)Temp_Min_Trip * 100U) ||
-            (Value >= (uint16_t)Temp_Max_Release * 100U)) {
+            (Value <= (uint16_t)threshold.Temp_Min_Trip * 100U) ||
+            (Value >= (uint16_t)threshold.Temp_Max_Release * 100U)) {
             return 0x03U;
         }
-        Temp_Min_Release = (uint8_t)(Value / 100U);
+        threshold.Temp_Min_Release = (uint8_t)(Value / 100U);
         break;
     case REG_VOLT_TRIP:
         if ((Value == 0U) || (Value > 330U) ||
-            (Value >= (uint16_t)Volt_Relsase * 100U)) {
+            (Value >= (uint16_t)threshold.Volt_Relsase * 100U)) {
             return 0x03U;
         }
-        Volt_Trip = (float)Value / 100.0f;
+        threshold.Volt_Trip = (float)Value / 100.0f;
         break;
     case REG_VOLT_RELEASE:
         if ((Value > 330U) || (Value % 100U != 0U) ||
-            (Value <= (uint16_t)(Volt_Trip * 100.0f + 0.5f))) {
+            (Value <= (uint16_t)(threshold.Volt_Trip * 100.0f + 0.5f))) {
             return 0x03U;
         }
-        Volt_Relsase = (uint8_t)(Value / 100U);
+        threshold.Volt_Relsase = (uint8_t)(Value / 100U);
         break;
     case REG_MOTOR_SPEED_MIN_TRIP:
-        if ((Value <= Motor_Speed_Stall_Release) ||
-            (Value >= Motor_Speed_Min_Release)) {
+        if ((Value <= threshold.Motor_Speed_Stall_Release) ||
+            (Value >= threshold.Motor_Speed_Min_Release)) {
             return 0x03U;
         }
-        Motor_Speed_Min_Trip = Value;
+        threshold.Motor_Speed_Min_Trip = Value;
         break;
     case REG_MOTOR_SPEED_MIN_RELEASE:
-        if ((Value <= Motor_Speed_Min_Trip) ||
-            (Value >= Motor_Speed_Max_Release)) {
+        if ((Value <= threshold.Motor_Speed_Min_Trip) ||
+            (Value >= threshold.Motor_Speed_Max_Release)) {
             return 0x03U;
         }
-        Motor_Speed_Min_Release = Value;
+        threshold.Motor_Speed_Min_Release = Value;
         break;
     case REG_MOTOR_SPEED_MAX_TRIP:
-        if (Value <= Motor_Speed_Max_Release) {
+        if (Value <= threshold.Motor_Speed_Max_Release) {
             return 0x03U;
         }
-        Motor_Speed_Max_Trip = Value;
+        threshold.Motor_Speed_Max_Trip = Value;
         break;
     case REG_MOTOR_SPEED_MAX_RELEASE:
-        if ((Value >= Motor_Speed_Max_Trip) ||
-            (Value <= Motor_Speed_Min_Release)) {
+        if ((Value >= threshold.Motor_Speed_Max_Trip) ||
+            (Value <= threshold.Motor_Speed_Min_Release)) {
             return 0x03U;
         }
-        Motor_Speed_Max_Release = Value;
+        threshold.Motor_Speed_Max_Release = Value;
         break;
     default:
         return 0x02U;
     }
+    if (W25Q64_ConfigSave(&threshold) != W25Q64_OK) {
+        return 0x04U;
+    }
+
+    Temp_Min_Trip = threshold.Temp_Min_Trip;
+    Temp_Min_Release = threshold.Temp_Min_Release;
+    Temp_Max_Trip = threshold.Temp_Max_Trip;
+    Temp_Max_Release = threshold.Temp_Max_Release;
+    Current_Trip = threshold.Current_Trip;
+    Current_Relsase = threshold.Current_Relsase;
+    Volt_Trip = threshold.Volt_Trip;
+    Volt_Relsase = threshold.Volt_Relsase;
+    Motor_Speed_Min_Trip = threshold.Motor_Speed_Min_Trip;
+    Motor_Speed_Min_Release = threshold.Motor_Speed_Min_Release;
+    Motor_Speed_Max_Trip = threshold.Motor_Speed_Max_Trip;
+    Motor_Speed_Max_Release = threshold.Motor_Speed_Max_Release;
+    Motor_Speed_Stall_Trip = threshold.Motor_Speed_Stall_Trip;
+    Motor_Speed_Stall_Release = threshold.Motor_Speed_Stall_Release;
     return 0U;
 }
 
@@ -472,9 +505,7 @@ void RS485_Task(void *arg)
                 break;
 
             case 0x0006:
-                taskENTER_CRITICAL();
                 Exception = RS485_WriteThreshold(Reg_AddressStart,Read_RegCount);
-                taskEXIT_CRITICAL();
                 if (Exception == 0U) {
                     for (uint8_t i = 0U; i < 8U; i++) {
                         RS485Tx_Data[i] = Receive_QueueValue.Data[i];

@@ -84,13 +84,13 @@ static FRESULT SD_TryRemount(void)
     const char header[] =
         "sequence,time,rpm,current,temp,voltage,fault\r\n";
 
-    /* 解除旧卷注册，避免继续使用拔卡前的文件对象 */
+   
     result = f_mount(NULL, (TCHAR *)SDPath, 0);
     if (result != FR_OK) {
         return result;
     }
 
-    /* 重新检测并挂载当前 SD 卡 */
+    
     result = f_mount(&SDFatFS, (TCHAR *)SDPath, 1);
     if (result != FR_OK) {
         goto failed;
@@ -103,9 +103,9 @@ static FRESULT SD_TryRemount(void)
         goto failed;
     }
 
-    /* 找到最后一条以换行符结束的记录，并清除不完整尾行 */
+    /
     last_sequence = SD_ReadLastSequence(&SDFile, &valid_end);
-    (void)last_sequence; /* 运行中不回退 ADC 序号，避免序号重复 */
+    (void)last_sequence; 
 
     result = f_lseek(&SDFile, valid_end);
     if (result != FR_OK) {
@@ -117,7 +117,7 @@ static FRESULT SD_TryRemount(void)
         goto failed;
     }
 
-    /* 新卡或空文件需要补写表头 */
+  
     if (f_size(&SDFile) == 0) {
         result = f_write(&SDFile, header, sizeof(header) - 1, &written);
         if ((result != FR_OK) || (written != sizeof(header) - 1)) {
@@ -133,7 +133,7 @@ static FRESULT SD_TryRemount(void)
         }
     }
 
-    /* 恢复到文件末尾，后续记录从这里追加 */
+    
     result = f_lseek(&SDFile, f_size(&SDFile));
     if (result != FR_OK) {
         goto failed;
@@ -142,7 +142,7 @@ static FRESULT SD_TryRemount(void)
     return FR_OK;
 
 failed:
-    /* 让下次重试从重新挂载开始，不继续使用可能失效的 FIL */
+ 
     (void)f_mount(NULL, (TCHAR *)SDPath, 0);
     return result;
 }
@@ -177,10 +177,10 @@ void SD_Task(void *arg)
         return;
     }
 
-    /* 读取旧文件最后一条有效记录的序号 */
+   
     last_sequence = SD_ReadLastSequence(&SDFile, &valid_end);
 
-    /* 删除文件末尾可能存在的不完整行 */
+   
     if ((f_lseek(&SDFile, valid_end) != FR_OK) || (f_truncate(&SDFile) != FR_OK)) {
         ADC_Val.sequence = 0;
         xTaskNotifyGive(ADC_ProcessingHandle);
@@ -188,7 +188,7 @@ void SD_Task(void *arg)
         return;
     }
 
-    /* 新文件第一次使用时写表头 */
+   
     if (f_size(&SDFile) == 0) {
         Result = f_write(&SDFile, Header,(UINT)sizeof(Header) - 1,&Written);
 
@@ -200,7 +200,7 @@ void SD_Task(void *arg)
         }
     }
 
-    /* 文件指针移动到真正的末尾，后面执行追加写入 */
+  
     if (f_lseek(&SDFile, f_size(&SDFile)) != FR_OK) {
         ADC_Val.sequence = 0;
         xTaskNotifyGive(ADC_ProcessingHandle);
@@ -208,10 +208,10 @@ void SD_Task(void *arg)
         return;
     }
 
-    /* 恢复旧序号 */
+  
     ADC_Val.sequence = last_sequence;
 
-    /* 通知 ADC 任务：序号已经恢复，可以开始工作 */
+    
     xTaskNotifyGive(ADC_ProcessingHandle);
 
     while (1) 

@@ -202,6 +202,7 @@ static void System_Init(void)
     //HAL_TIM_Base_Start_IT(&htim4);  
     UartTx_Init();  
     W25Q64_Init();
+    (void)W25Q64_ConfigLoad();
     if(CLI_Init() != HAL_OK){
       Error_Handler();
 
