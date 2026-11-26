@@ -33,8 +33,7 @@ static HAL_StatusTypeDef LCD_WriteCommand(const uint8_t *Command, size_t Length)
     return Result;
 }
 
-static void LCD_SendCommand(lv_display_t *Display, const uint8_t *Command, size_t CommandSize,
-                            const uint8_t *Data, size_t DataSize)
+static void LCD_SendCommand(lv_display_t *Display, const uint8_t *Command, size_t CommandSize,const uint8_t *Data, size_t DataSize)
 {
     (void)Display;
     if (!LCD_SPI_Failed) {
@@ -45,8 +44,7 @@ static void LCD_SendCommand(lv_display_t *Display, const uint8_t *Command, size_
     }
 }
 
-static void LCD_SendColor(lv_display_t *Display, const uint8_t *Command, size_t CommandSize,
-                          uint8_t *Pixels, size_t Size)
+static void LCD_SendColor(lv_display_t *Display, const uint8_t *Command, size_t CommandSize,uint8_t *Pixels, size_t Size)
 {
     if (!LCD_SPI_Failed) {
         HAL_StatusTypeDef Result = LCD_WriteCommand(Command, CommandSize);
@@ -80,8 +78,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     HAL_SPI_TxCpltCallback(hspi);
 }
 
-static lv_obj_t *LCD_Label(lv_obj_t *Parent, const char *Text, const lv_font_t *Font,
-                          lv_align_t Align, int32_t X, int32_t Y, lv_color_t Color)
+static lv_obj_t *LCD_Label(lv_obj_t *Parent, const char *Text, const lv_font_t *Font,lv_align_t Align, int32_t X, int32_t Y, lv_color_t Color)
 {
     lv_obj_t *Label = lv_label_create(Parent);
     lv_label_set_text(Label, Text);
