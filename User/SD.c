@@ -9,6 +9,7 @@
 #include "ADC_DATA.h"
 #include "sdio.h"
 #include "bsp_driver_sd.h"
+#include "SD.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,6 +17,7 @@
 
 
 xQueueHandle SD_Handle;
+volatile uint8_t SD_Online;
 extern Motor_Data_t ADC_Val;
 extern TaskHandle_t ADC_ProcessingHandle;
 
@@ -103,7 +105,6 @@ static FRESULT SD_TryRemount(void)
         goto failed;
     }
 
-    /
     last_sequence = SD_ReadLastSequence(&SDFile, &valid_end);
     (void)last_sequence; 
 
@@ -155,7 +156,6 @@ void SD_Task(void *arg)
     Motor_Data_t Write_Data;
     char line[128];
     uint8_t Flush_CacheCount = 0;
-    uint8_t SD_Online = 1;
     uint32_t last_sequence;
     FSIZE_t valid_end;
     const char Header[] =  "sequence,time,rpm,current,temp,voltage,fault\r\n";
@@ -210,6 +210,7 @@ void SD_Task(void *arg)
 
   
     ADC_Val.sequence = last_sequence;
+    SD_Online = 1;
 
     
     xTaskNotifyGive(ADC_ProcessingHandle);
@@ -242,6 +243,7 @@ void SD_Task(void *arg)
                                                 (unsigned int)Write_Data.fault_code);
 
         if ((len <= 0) || (len >= (int)sizeof(line))) {
+            SD_Online = 0;
             f_close(&SDFile);
             osDelay(portMAX_DELAY);
         }       

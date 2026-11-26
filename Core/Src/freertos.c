@@ -34,6 +34,7 @@
 #include "SD.h"
 #include "W25Q64.h"
 #include "RS485.h"
+#include "LCD.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,7 +60,8 @@ extern TaskHandle_t RS485_TaskHandle;
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+static StaticTask_t LCD_TaskBuffer;
+static StackType_t LCD_Stack[1024];
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -124,6 +126,7 @@ void MX_FREERTOS_Init(void) {
   if(xTaskCreate(RS485_Task, "RS485", 256, NULL, osPriorityNormal,&RS485_TaskHandle) != pdPASS){
     vTaskDelete(LED_Handle);
   }
+  xTaskCreateStatic(LCD_Task, "LCD", 1024, NULL, osPriorityBelowNormal, LCD_Stack, &LCD_TaskBuffer);
   
   
   /* add threads, ... */

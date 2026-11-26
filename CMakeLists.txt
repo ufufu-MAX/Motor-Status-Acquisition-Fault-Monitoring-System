@@ -37,6 +37,20 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+include(FetchContent)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+set(LV_BUILD_CONF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/User" CACHE PATH "LVGL config directory" FORCE)
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "Build LVGL demos")
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "Build LVGL examples")
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "Build LVGL ThorVG")
+FetchContent_Declare(lvgl
+    URL https://codeload.github.com/lvgl/lvgl/tar.gz/refs/tags/v9.3.0
+    URL_HASH SHA256=4933becfd3603b29158a5d04138139582836ef2bc17beb6c39dccda9cb0d32e7
+)
+FetchContent_MakeAvailable(lvgl)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -59,6 +73,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/User/SD.c
     ${CMAKE_CURRENT_SOURCE_DIR}/User/W25Q64.c
     ${CMAKE_CURRENT_SOURCE_DIR}/User/RS485.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/User/LCD.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/User/Fonts/LCD_Font.c
 )
 
 # Add include paths
@@ -78,6 +94,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
+    lvgl::lvgl
 
     # Add user defined libraries
 )
